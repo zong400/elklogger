@@ -17,6 +17,7 @@ type UdpHandler struct {
 
 type UdpLogger struct {
 	*slog.Logger
+	level *slog.LevelVar
 }
 
 func NewUdpHandler(w io.Writer, opts *slog.HandlerOptions, appname, podname string) *UdpHandler {
@@ -51,7 +52,7 @@ func (h *UdpHandler) Handle(ctx context.Context, record slog.Record) error {
 // }
 
 // 初始化udp发送日志
-func NewUdpLogger(updaddr, appname string) *UdpLogger {
+func NewUdpLogger(updaddr, appname string, level slog.Level) *UdpLogger {
 	podname := os.Getenv("HOSTNAME")
 	var writer io.Writer
 	udpWriter, err := NewUDPWriter(updaddr)
@@ -62,11 +63,13 @@ func NewUdpLogger(updaddr, appname string) *UdpLogger {
 		writer = io.MultiWriter(os.Stdout, udpWriter)
 	}
 
+	lv := new(slog.LevelVar)
+	lv.Set(level)
 	l := slog.New(NewUdpHandler(
 		writer,
 		&slog.HandlerOptions{
 			AddSource: false,
-			Level:     slog.LevelDebug,
+			Level:     lv,
 			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 				if a.Key == slog.MessageKey {
 					return slog.Attr{Key: "message", Value: a.Value}
@@ -81,7 +84,15 @@ func NewUdpLogger(updaddr, appname string) *UdpLogger {
 		podname,
 	))
 
-	return &UdpLogger{l}
+	return &UdpLogger{l, lv}
+}
+
+func (l *UdpLogger) SetLogLevel(level slog.Level) {
+	l.level.Set(level)
+}
+
+func (l *UdpLogger) GetLogLevel() string {
+	return l.level.String()
 }
 
 func NewUDPWriter(addr string) (io.Writer, error) {
